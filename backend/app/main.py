@@ -23,3 +23,9 @@ async def root():
 
 # Register WordPress routes (New Line)
 app.include_router(wordpress.router)
+
+# Import Auth Router
+from app.api import wordpress, auth
+
+# Add Auth router
+app.include_router(auth.router)
