@@ -7,36 +7,61 @@ from app.models.credentials import credentials
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+# In-memory store for temporary credentials (use secure store like Redis in production)
+temporary_tokens = {}
+
 @router.get("/twitter")
 async def twitter_login():
-    oauth = OAuth1Session(settings.TWITTER_API_KEY, settings.TWITTER_API_SECRET)
-    fetch_response = oauth.fetch_request_token("https://api.twitter.com/oauth/request_token")
-    authorization_url = oauth.authorization_url("https://api.twitter.com/oauth/authorize")
-    return RedirectResponse(authorization_url)
+    try:
+        oauth = OAuth1Session(settings.TWITTER_API_KEY, settings.TWITTER_API_SECRET)
+        fetch_response = oauth.fetch_request_token("https://api.twitter.com/oauth/request_token")
+
+        # Save the temporary token & secret
+        temp_oauth_token = fetch_response.get("oauth_token")
+        temp_oauth_token_secret = fetch_response.get("oauth_token_secret")
+        temporary_tokens[temp_oauth_token] = temp_oauth_token_secret
+
+        authorization_url = oauth.authorization_url("https://api.twitter.com/oauth/authorize")
+        return RedirectResponse(authorization_url)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Twitter login failed: {str(e)}")
+
 
 @router.get("/twitter/callback")
 async def twitter_callback(oauth_token: str, oauth_verifier: str):
-    oauth = OAuth1Session(
-        settings.TWITTER_API_KEY,
-        settings.TWITTER_API_SECRET,
-        oauth_token,
-        oauth_verifier
-    )
+    try:
+        temp_secret = temporary_tokens.get(oauth_token)
+        if not temp_secret:
+            raise HTTPException(status_code=400, detail="Missing temporary token secret.")
 
-    access_token_url = "https://api.twitter.com/oauth/access_token"
-    oauth_tokens = oauth.fetch_access_token(access_token_url)
+        # Rebuild the session using the temp credentials and verifier
+        oauth = OAuth1Session(
+            settings.TWITTER_API_KEY,
+            settings.TWITTER_API_SECRET,
+            resource_owner_key=oauth_token,
+            resource_owner_secret=temp_secret,
+            verifier=oauth_verifier
+        )
 
-    oauth_token = oauth_tokens.get("oauth_token")
-    oauth_token_secret = oauth_tokens.get("oauth_token_secret")
+        access_token_url = "https://api.twitter.com/oauth/access_token"
+        oauth_tokens = oauth.fetch_access_token(access_token_url)
 
-    # Securely store tokens in database
-    query = credentials.insert().values(
-        platform="twitter",
-        oauth_token=oauth_token,
-        oauth_token_secret=oauth_token_secret
-    )
-    await database.connect()
-    await database.execute(query)
-    await database.disconnect()
+        final_oauth_token = oauth_tokens.get("oauth_token")
+        final_oauth_token_secret = oauth_tokens.get("oauth_token_secret")
 
-    return {"message": "Twitter authentication successful!"}
+        # Save access tokens to DB
+        query = credentials.insert().values(
+            platform="twitter",
+            oauth_token=final_oauth_token,
+            oauth_token_secret=final_oauth_token_secret
+        )
+        await database.connect()
+        await database.execute(query)
+        await database.disconnect()
+
+        return {"message": "✅ Twitter authentication successful!"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Twitter callback failed: {str(e)}")
+
