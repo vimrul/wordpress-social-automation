@@ -1,4 +1,4 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./social_auto.db"
@@ -8,3 +8,4 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
+
