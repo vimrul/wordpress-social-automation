@@ -1,22 +1,35 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from app.services.social_service import post_to_twitter
-from app.services.hashtag_service import generate_hashtags
+from tweepy import Client
+from app.core.database import database
+from app.models.credentials import credentials
 
-router = APIRouter(prefix="/social", tags=["Social"])
+async def get_twitter_credentials():
+    await database.connect()
+    query = credentials.select().where(credentials.c.platform == "twitter")
+    twitter_cred = await database.fetch_one(query)
+    await database.disconnect()
+    return twitter_cred
 
-class TwitterPost(BaseModel):
-    title: str
-    seo_description: str
-    link: str
+async def post_to_twitter(status_text: str):
+    creds = await get_twitter_credentials()
+    if not creds:
+        raise Exception("Twitter OAuth2 credentials not found. Please authenticate.")
 
-@router.post("/twitter")
-async def twitter_post(data: TwitterPost):
-    hashtags = generate_hashtags(data.title + " " + data.seo_description)
-    status_text = f"{data.seo_description}\n{data.link}\n{' '.join(hashtags)}"
+    print("🚀 Attempting to post to Twitter...")
+    print("📝 Tweet Content:\n", status_text)
+    print("🔐 Initializing Tweepy client...")
 
     try:
-        response = await post_to_twitter(status_text)
-        return {"message": "Successfully posted!", "response": response}
+        client = Client(
+            access_token=creds.oauth_token  # Using OAuth2 access token
+        )
+
+        print("📡 Sending tweet...")
+        response = client.create_tweet(text=status_text)
+        print("✅ Tweet posted! Response:", response)
+
+        return response.data
+
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print("❌ Failed to post tweet.")
+        print("💥 Exception:", e)
+        raise e
