@@ -7,53 +7,62 @@ import tweepy
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Step 1: Redirect user to Twitter to authenticate
+# Step 1: Redirect to Twitter
 @router.get("/twitter")
-async def twitter_login():
+async def twitter_login(request: Request):
     try:
         oauth2_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
-            client_secret=settings.TWITTER_CLIENT_SECRET,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
-            scope=["tweet.read", "tweet.write", "users.read", "offline.access"]
+            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
+            client_secret=settings.TWITTER_CLIENT_SECRET  # optional, but safest
         )
 
-        auth_url = oauth2_handler.get_authorization_url()
-        return RedirectResponse(auth_url)
+        authorization_url = oauth2_handler.get_authorization_url()
+
+        # Save state (PKCE flow needs it)
+        request.session["state"] = oauth2_handler.state
+        request.session["code_verifier"] = oauth2_handler.code_verifier
+
+        return RedirectResponse(authorization_url)
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# Step 2: Twitter redirects to this callback
+# Step 2: Callback
 @router.get("/twitter/callback")
-async def twitter_callback(code: str):
+async def twitter_callback(request: Request, code: str, state: str):
     try:
-        # Rebuild the handler with the same credentials and scope
+        # Rebuild handler with verifier
         oauth2_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
-            client_secret=settings.TWITTER_CLIENT_SECRET,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
-            scope=["tweet.read", "tweet.write", "users.read", "offline.access"]
+            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
+            client_secret=settings.TWITTER_CLIENT_SECRET
         )
 
-        # Fetch token using the code
+        # Set previously saved verifier
+        oauth2_handler.code_verifier = request.session.get("code_verifier")
+
+        # Exchange code for tokens
         token_data = oauth2_handler.fetch_token(code=code)
 
         access_token = token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
 
-        # Save to database
-        query = credentials.insert().values(
-            platform="twitter",
-            oauth_token=access_token,
-            oauth_token_secret=refresh_token
-        )
+        # Save tokens
         await database.connect()
-        await database.execute(query)
+        await database.execute(
+            credentials.insert().values(
+                platform="twitter",
+                oauth_token=access_token,
+                oauth_token_secret=refresh_token
+            )
+        )
         await database.disconnect()
 
         return JSONResponse({
-            "message": "✅ Twitter OAuth2 token saved!",
+            "message": "✅ Twitter OAuth2 authentication successful!",
             "access_token": access_token,
             "refresh_token": refresh_token
         })
