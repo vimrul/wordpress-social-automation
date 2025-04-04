@@ -66,6 +66,7 @@ async def twitter_callback(request: Request, code: str, state: str):
 
         token_data = response.json()
         access_token = token_data["access_token"]
+        print("🔑 Token data from Twitter:", token_data)
         refresh_token = token_data.get("refresh_token")
 
         await database.connect()
