@@ -7,6 +7,7 @@ const PostsList = ({ jsonUrl }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Fetch posts from backend using jsonUrl
   useEffect(() => {
     axios
       .get(`http://localhost:8000/wordpress/posts?json_url=${jsonUrl}`)
@@ -20,18 +21,49 @@ const PostsList = ({ jsonUrl }) => {
       });
   }, [jsonUrl]);
 
+  // Toggle checkbox state
   const toggleSelectPost = (id) => {
     setSelectedPosts((prev) =>
       prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]
     );
   };
 
-  if (loading)
+  // Post selected items to Twitter
+  const postToTwitter = () => {
+    const selected = posts.filter((p) => selectedPosts.includes(p.id));
+
+    if (selected.length === 0) {
+      alert("Please select at least one post.");
+      return;
+    }
+
+    selected.forEach((post) => {
+      axios
+        .post("http://localhost:8000/social/twitter", {
+          title: post.title,
+          seo_description: post.seo_description || post.excerpt,
+          link: post.link,
+        })
+        .then(() => {
+          alert(`✅ Posted: ${post.title}`);
+        })
+        .catch((error) => {
+          alert(`❌ Failed to post: ${post.title}\n${error.message}`);
+        });
+    });
+  };
+
+  // Show loading state
+  if (loading) {
     return <p className="text-center my-10 text-xl">Loading posts...</p>;
+  }
 
-  if (error)
+  // Show error if occurred
+  if (error) {
     return <p className="text-center text-red-500 my-10">Error: {error}</p>;
+  }
 
+  // Render posts
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
@@ -40,7 +72,7 @@ const PostsList = ({ jsonUrl }) => {
             {post.featured_image && (
               <img
                 src={post.featured_image}
-                alt={post.title}
+                alt={post.title || "Post image"}
                 className="rounded mb-3"
               />
             )}
@@ -49,6 +81,7 @@ const PostsList = ({ jsonUrl }) => {
             <a
               href={post.link}
               target="_blank"
+              rel="noopener noreferrer"
               className="text-blue-500 hover:underline"
             >
               Read More
@@ -64,10 +97,14 @@ const PostsList = ({ jsonUrl }) => {
           </div>
         ))}
       </div>
+
       {selectedPosts.length > 0 && (
-        <div className="text-center my-4">
-          <button className="bg-blue-600 text-white px-4 py-2 rounded">
-            Proceed to Post {selectedPosts.length} Selected
+        <div className="text-center my-6">
+          <button
+            onClick={postToTwitter}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded-lg transition duration-200"
+          >
+            Post {selectedPosts.length} Selected to Twitter
           </button>
         </div>
       )}
