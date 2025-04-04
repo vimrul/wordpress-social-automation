@@ -1,5 +1,4 @@
 # app/api/social.py
-
 from fastapi import APIRouter, HTTPException
 from tweepy import Client
 from app.core.database import database
@@ -29,16 +28,15 @@ async def twitter_post(data: TwitterPost):
 
     creds = await get_twitter_credentials()
     if not creds:
-        raise HTTPException(status_code=403, detail="❌ Twitter credentials not found. Please authenticate first.")
+        raise HTTPException(status_code=403, detail="❌ Twitter OAuth2 credentials not found. Please authenticate.")
 
     try:
         print("🚀 Attempting to post to Twitter...")
         print("📝 Tweet Content:\n", status_text)
 
-        # ✅ Use OAuth2 user context properly
+        # ✅ Correct usage: ONLY access_token + client_id + client_secret
         client = Client(
             access_token=creds.oauth_token,
-            refresh_token=creds.oauth_token_secret,
             client_id=settings.TWITTER_CLIENT_ID,
             client_secret=settings.TWITTER_CLIENT_SECRET
         )
