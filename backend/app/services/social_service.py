@@ -15,7 +15,9 @@ async def post_to_twitter(status_text: str):
     if not creds:
         raise Exception("Twitter credentials not found.")
 
+    # Tweepy Client initialization with bearer token
     client = tweepy.Client(
+        bearer_token=settings.TWITTER_BEARER_TOKEN,  # clearly add this line
         consumer_key=settings.TWITTER_API_KEY,
         consumer_secret=settings.TWITTER_API_SECRET,
         access_token=creds.oauth_token,
@@ -25,6 +27,7 @@ async def post_to_twitter(status_text: str):
     response = client.create_tweet(text=status_text)
 
     return response.data
+
 
 
 # async def post_to_twitter(status_text: str):
