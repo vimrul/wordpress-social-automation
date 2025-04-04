@@ -1,4 +1,3 @@
-# app/api/social.py
 from fastapi import APIRouter, HTTPException
 from tweepy import Client
 from app.core.database import database
@@ -34,11 +33,11 @@ async def twitter_post(data: TwitterPost):
         print("🚀 Attempting to post to Twitter...")
         print("📝 Tweet Content:\n", status_text)
 
-        # ✅ Correct usage: ONLY access_token + client_id + client_secret
+        # ✅ CORRECT: Use OAuth 1.0a credentials to post a tweet
         client = Client(
             access_token=creds.oauth_token,
-            client_id=settings.TWITTER_CLIENT_ID,
-            client_secret=settings.TWITTER_CLIENT_SECRET
+            consumer_key=settings.TWITTER_CONSUMER_KEY,
+            consumer_secret=settings.TWITTER_CONSUMER_SECRET
         )
 
         print("📡 Sending tweet...")
