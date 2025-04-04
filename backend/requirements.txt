@@ -10,3 +10,4 @@ beautifulsoup4
 httpx
 requests-oauthlib
 aiosqlite
+tweepy
