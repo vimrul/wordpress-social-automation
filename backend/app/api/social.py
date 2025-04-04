@@ -1,8 +1,18 @@
+# app/api/social.py
+from fastapi import APIRouter, HTTPException
 from tweepy import Client
 from app.core.database import database
 from app.models.credentials import credentials
-from fastapi import APIRouter
+from pydantic import BaseModel
+from app.services.hashtag_service import generate_hashtags
+
 router = APIRouter(prefix="/social", tags=["Social"])
+
+class TwitterPost(BaseModel):
+    title: str
+    seo_description: str
+    link: str
+
 async def get_twitter_credentials():
     await database.connect()
     query = credentials.select().where(credentials.c.platform == "twitter")
@@ -10,27 +20,28 @@ async def get_twitter_credentials():
     await database.disconnect()
     return twitter_cred
 
-async def post_to_twitter(status_text: str):
+@router.post("/twitter")
+async def twitter_post(data: TwitterPost):
+    hashtags = generate_hashtags(data.title + " " + data.seo_description)
+    status_text = f"{data.seo_description}\n{data.link}\n{' '.join(hashtags)}"
+
     creds = await get_twitter_credentials()
     if not creds:
-        raise Exception("Twitter OAuth2 credentials not found. Please authenticate.")
-
-    print("🚀 Attempting to post to Twitter...")
-    print("📝 Tweet Content:\n", status_text)
-    print("🔐 Initializing Tweepy client...")
+        raise HTTPException(status_code=403, detail="Twitter OAuth2 credentials not found. Please authenticate.")
 
     try:
-        client = Client(
-            access_token=creds.oauth_token  # Using OAuth2 access token
-        )
+        print("🚀 Attempting to post to Twitter...")
+        print("📝 Tweet Content:\n", status_text)
+
+        client = Client(bearer_token=None, access_token=creds.oauth_token)
 
         print("📡 Sending tweet...")
         response = client.create_tweet(text=status_text)
         print("✅ Tweet posted! Response:", response)
 
-        return response.data
+        return {"message": "Tweet posted!", "response": response.data}
 
     except Exception as e:
         print("❌ Failed to post tweet.")
         print("💥 Exception:", e)
-        raise e
+        raise HTTPException(status_code=400, detail=str(e))
