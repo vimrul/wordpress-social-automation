@@ -29,3 +29,7 @@ from app.api import wordpress, auth
 
 # Add Auth router
 app.include_router(auth.router)
+
+from app.api import wordpress, auth, social  # clearly import social
+
+app.include_router(social.router)  # clearly register router
