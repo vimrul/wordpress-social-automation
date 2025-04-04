@@ -4,7 +4,6 @@ from app.core.database import database
 from app.models.credentials import credentials
 from pydantic import BaseModel
 from app.services.hashtag_service import generate_hashtags
-from app.core.config import settings
 
 router = APIRouter(prefix="/social", tags=["Social"])
 
@@ -27,26 +26,31 @@ async def twitter_post(data: TwitterPost):
 
     creds = await get_twitter_credentials()
     if not creds:
-        raise HTTPException(status_code=403, detail="❌ Twitter OAuth2 credentials not found. Please authenticate.")
+        raise HTTPException(status_code=403, detail="Twitter OAuth2 credentials not found. Please authenticate.")
 
     try:
         print("🚀 Attempting to post to Twitter...")
         print("📝 Tweet Content:\n", status_text)
 
-        # ✅ CORRECT: Use OAuth 1.0a credentials to post a tweet
-        client = Client(
-            access_token=creds.oauth_token,
-            consumer_key=settings.TWITTER_CONSUMER_KEY,
-            consumer_secret=settings.TWITTER_CONSUMER_SECRET
-        )
+        # ✅ Only use access_token here for OAuth2 user context
+        client = Client(access_token=creds.oauth_token)
 
         print("📡 Sending tweet...")
         response = client.create_tweet(text=status_text)
-
         print("✅ Tweet posted! Response:", response)
+
         return {"message": "✅ Tweet posted!", "response": response.data}
 
     except Exception as e:
         print("❌ Failed to post tweet.")
         print("💥 Exception:", e)
         raise HTTPException(status_code=400, detail=str(e))
+@router.get("/debug/twitter-token")
+async def debug_twitter_token():
+    await database.connect()
+    result = await database.fetch_one(credentials.select().where(credentials.c.platform == "twitter"))
+    await database.disconnect()
+
+    if result:
+        return {"twitter_credentials": dict(result)}
+    return {"message": "No Twitter credentials found"}
