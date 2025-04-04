@@ -12,3 +12,4 @@ requests-oauthlib
 aiosqlite
 tweepy
 pydantic-settings
+itsdangerous

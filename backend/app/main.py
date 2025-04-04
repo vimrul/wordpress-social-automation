@@ -33,3 +33,7 @@ app.include_router(auth.router)
 from app.api import wordpress, auth, social  # clearly import social
 
 app.include_router(social.router)  # clearly register router
+
+from starlette.middleware.sessions import SessionMiddleware
+
+app.add_middleware(SessionMiddleware, secret_key="your_super_secret_key")
