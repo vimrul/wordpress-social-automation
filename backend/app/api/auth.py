@@ -12,6 +12,8 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 async def twitter_login(request: Request):
     try:
         # ✅ Generate your own code_verifier
+        print("📦 Session keys at callback:", list(request.session.keys()))
+        print("📦 code_verifier at callback:", request.session.get("code_verifier"))
         code_verifier = secrets.token_urlsafe(64)
         request.session["code_verifier"] = code_verifier  # ✅ this must be a string
 
@@ -44,21 +46,23 @@ async def twitter_login(request: Request):
 async def twitter_callback(request: Request, code: str, state: str):
     try:
         code_verifier = request.session.get("code_verifier")
+        print("📦 Session keys at callback:", list(request.session.keys()))
+        print("📦 code_verifier at callback:", code_verifier)
 
-        # ✅ Re-init handler
         oauth2_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
             scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
             client_secret=settings.TWITTER_CLIENT_SECRET,
         )
+        # ✅ Must assign again
         oauth2_handler.code_verifier = code_verifier
 
-        # ✅ Full redirect URL with code + state
-        full_redirect_url = f"{settings.TWITTER_REDIRECT_URI}?code={code}&state={state}"
-
-        # ✅ Get tokens
-        token_data = oauth2_handler.fetch_token(authorization_response=full_redirect_url)
+        # 👇 Explicitly pass code_verifier here!
+        token_data = oauth2_handler.fetch_token(
+            authorization_response=f"{settings.TWITTER_REDIRECT_URI}?code={code}&state={state}",
+            code_verifier=code_verifier
+        )
 
         access_token = token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
