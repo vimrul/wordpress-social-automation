@@ -10,7 +10,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.get("/twitter")
 async def twitter_login(request: Request):
-    state = str(uuid.uuid4())  # use for CSRF protection if you want
+    state = str(uuid.uuid4())  # Optional: use for CSRF protection
 
     oauth2_user_handler = tweepy.OAuth2UserHandler(
         client_id=settings.TWITTER_CLIENT_ID,
@@ -19,43 +19,50 @@ async def twitter_login(request: Request):
         client_secret=settings.TWITTER_CLIENT_SECRET
     )
 
-    authorization_url = oauth2_user_handler.get_authorization_url()
-    request.session["oauth2_state"] = state
-    request.session["oauth2_handler"] = oauth2_user_handler
+    authorization_url = oauth2_user_handler.get_authorization_url(state=state)
 
+    # Store only the `state` string in session (optional)
+    request.session["oauth2_state"] = state
+
+    # Don't store the handler itself — it's not JSON serializable
     return RedirectResponse(authorization_url)
+
 
 @router.get("/twitter/callback")
 async def twitter_callback(request: Request, code: str, state: str = None):
     try:
-        oauth2_user_handler: tweepy.OAuth2UserHandler = request.session.get("oauth2_handler")
+        # Optional: validate state here if you stored it in session
 
-        # Exchange code for access token
+        # Rebuild the handler object
+        oauth2_user_handler = tweepy.OAuth2UserHandler(
+            client_id=settings.TWITTER_CLIENT_ID,
+            redirect_uri=settings.TWITTER_REDIRECT_URI,
+            client_secret=settings.TWITTER_CLIENT_SECRET
+        )
+
         token_response = oauth2_user_handler.fetch_token(code=code)
 
         access_token = token_response["access_token"]
         refresh_token = token_response.get("refresh_token")
 
-        # Store tokens in DB
+        # Save tokens to DB
         query = credentials.insert().values(
             platform="twitter",
             oauth_token=access_token,
-            oauth_token_secret=refresh_token  # naming re-used here for convenience
+            oauth_token_secret=refresh_token
         )
         await database.connect()
         await database.execute(query)
         await database.disconnect()
 
         return JSONResponse({
-            "message": "✅ Twitter OAuth2 complete",
+            "message": "✅ Twitter OAuth2 flow completed!",
             "access_token": access_token,
             "refresh_token": refresh_token
         })
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-
 
 # from fastapi import APIRouter, Request, HTTPException
 # from fastapi.responses import RedirectResponse

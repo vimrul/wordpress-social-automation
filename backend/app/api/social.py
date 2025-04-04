@@ -1,7 +1,8 @@
 from tweepy import Client
 from app.core.database import database
 from app.models.credentials import credentials
-
+from fastapi import APIRouter
+router = APIRouter(prefix="/social", tags=["Social"])
 async def get_twitter_credentials():
     await database.connect()
     query = credentials.select().where(credentials.c.platform == "twitter")
