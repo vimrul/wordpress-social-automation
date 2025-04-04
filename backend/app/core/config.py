@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     TWITTER_API_KEY: str
     TWITTER_API_SECRET: str
     TWITTER_BEARER_TOKEN: str
+    TWITTER_ACCESS_TOKEN: str | None = None
+    TWITTER_ACCESS_SECRET: str | None = None
 
     class Config:
         env_file = ".env"
