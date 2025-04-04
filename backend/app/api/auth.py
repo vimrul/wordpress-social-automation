@@ -1,4 +1,3 @@
-# app/api/auth.py
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 from app.core.config import settings
@@ -8,37 +7,45 @@ import tweepy
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+# Step 1: Redirect user to Twitter
 @router.get("/twitter")
-async def twitter_login():
+async def twitter_login(request: Request):
     try:
         oauth2_user_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
-            scope=["tweet.read", "tweet.write", "users.read", "offline.access"]
+            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
+            client_secret=settings.TWITTER_CLIENT_SECRET
         )
-        auth_url = oauth2_user_handler.get_authorization_url()
-        return RedirectResponse(auth_url)
+
+        # Save the handler temporarily in session (not ideal, better to use DB or Redis in production)
+        request.session["oauth2_user_handler"] = oauth2_user_handler
+
+        authorization_url = oauth2_user_handler.get_authorization_url()
+        return RedirectResponse(authorization_url)
+
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+# Step 2: Callback to receive token
 @router.get("/twitter/callback")
-async def twitter_callback(request: Request):
+async def twitter_callback(request: Request, code: str):
     try:
-        full_url = str(request.url)
-
+        # Recreate the handler (must match init details)
         oauth2_user_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
-            client_secret=settings.TWITTER_CLIENT_SECRET,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
-            scope=["tweet.read", "tweet.write", "users.read", "offline.access"]
+            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
+            client_secret=settings.TWITTER_CLIENT_SECRET
         )
 
-        # ✅ This is the correct method
-        token_response = oauth2_user_handler.get_access_token(full_url)
+        # 🔥 This is the correct method
+        token_data = oauth2_user_handler.fetch_token(code=code)
 
-        access_token = token_response["access_token"]
-        refresh_token = token_response.get("refresh_token")
+        access_token = token_data['access_token']
+        refresh_token = token_data.get('refresh_token')
 
+        # Save to DB
         query = credentials.insert().values(
             platform="twitter",
             oauth_token=access_token,
@@ -50,16 +57,13 @@ async def twitter_callback(request: Request):
         await database.disconnect()
 
         return JSONResponse({
-            "message": "✅ Twitter OAuth2 authentication successful!",
+            "message": "✅ Twitter OAuth2 token retrieved!",
             "access_token": access_token,
             "refresh_token": refresh_token
         })
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-
 
 # from fastapi import APIRouter, Request, HTTPException
 # from fastapi.responses import RedirectResponse
