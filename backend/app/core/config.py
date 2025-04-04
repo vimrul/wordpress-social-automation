@@ -1,5 +1,5 @@
 # app/core/config.py
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./social_auto.db"
@@ -7,12 +7,13 @@ class Settings(BaseSettings):
 
     TWITTER_API_KEY: str
     TWITTER_API_SECRET: str
-    TWITTER_BEARER_TOKEN: str  # Add this line carefully
+    TWITTER_BEARER_TOKEN: str
 
     class Config:
         env_file = ".env"
 
 settings = Settings()
+
 
 
 # from pydantic_settings import BaseSettings
