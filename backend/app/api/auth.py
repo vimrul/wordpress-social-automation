@@ -11,62 +11,57 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.get("/twitter")
 async def twitter_login(request: Request):
     try:
-        # Generate a secure code_verifier
+        # ✅ Generate your own code_verifier
         code_verifier = secrets.token_urlsafe(64)
 
-        # Initialize the OAuth2 handler
+        # ✅ Initialize handler WITHOUT code_verifier here
         oauth2_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
             scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
-            client_secret=settings.TWITTER_CLIENT_SECRET
+            client_secret=settings.TWITTER_CLIENT_SECRET,
         )
 
-        # Assign code_verifier after init
+        # ✅ Set it explicitly
         oauth2_handler.code_verifier = code_verifier
 
-        # Generate the authorization URL
+        # ✅ Get URL
         authorization_url = oauth2_handler.get_authorization_url()
 
-        # ✅ Only store serializable values in session
-        request.session["code_verifier"] = code_verifier
-        request.session["state"] = oauth2_handler.state
+        # ✅ Save only string types
+        request.session["state"] = str(oauth2_handler.state)
+        request.session["code_verifier"] = str(code_verifier)
 
         return RedirectResponse(authorization_url)
 
     except Exception as e:
+        print("💥 Error in /auth/twitter:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @router.get("/twitter/callback")
 async def twitter_callback(request: Request, code: str, state: str):
     try:
-        # Retrieve saved state and code_verifier from session
         code_verifier = request.session.get("code_verifier")
-        saved_state = request.session.get("state")
 
-        if not code_verifier or saved_state != state:
-            return JSONResponse(status_code=400, content={"error": "Invalid state or missing verifier"})
-
-        # Rebuild the handler
+        # ✅ Re-init handler
         oauth2_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
             scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
-            client_secret=settings.TWITTER_CLIENT_SECRET
+            client_secret=settings.TWITTER_CLIENT_SECRET,
         )
-
         oauth2_handler.code_verifier = code_verifier
 
-        # Exchange code for tokens
-        token_data = oauth2_handler.fetch_token(
-            code=code
-        )
+        # ✅ Full redirect URL with code + state
+        full_redirect_url = f"{settings.TWITTER_REDIRECT_URI}?code={code}&state={state}"
+
+        # ✅ Get tokens
+        token_data = oauth2_handler.fetch_token(authorization_response=full_redirect_url)
 
         access_token = token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
 
-        # Save to database
         await database.connect()
         await database.execute(
             credentials.insert().values(
@@ -78,10 +73,11 @@ async def twitter_callback(request: Request, code: str, state: str):
         await database.disconnect()
 
         return JSONResponse({
-            "message": "✅ Twitter OAuth2 authentication successful!",
+            "message": "✅ Twitter OAuth2 success!",
             "access_token": access_token,
             "refresh_token": refresh_token
         })
 
     except Exception as e:
+        print("💥 Callback error:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
