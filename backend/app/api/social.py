@@ -5,6 +5,7 @@ from app.core.database import database
 from app.models.credentials import credentials
 from pydantic import BaseModel
 from app.services.hashtag_service import generate_hashtags
+from app.core.config import settings  # ✅ Make sure to import this!
 
 router = APIRouter(prefix="/social", tags=["Social"])
 
@@ -22,7 +23,7 @@ async def get_twitter_credentials():
 
 @router.post("/twitter")
 async def twitter_post(data: TwitterPost):
-    hashtags = generate_hashtags(data.title + " " + data.seo_description)
+    hashtags = generate_hashtags(f"{data.title} {data.seo_description}")
     status_text = f"{data.seo_description}\n{data.link}\n{' '.join(hashtags)}"
 
     creds = await get_twitter_credentials()
@@ -33,13 +34,18 @@ async def twitter_post(data: TwitterPost):
         print("🚀 Attempting to post to Twitter...")
         print("📝 Tweet Content:\n", status_text)
 
-        client = Client(bearer_token=None, access_token=creds.oauth_token)
+        # ✅ OAuth2 (user context) with access_token, client_id (as consumer_key), client_secret
+        client = Client(
+            access_token=creds.oauth_token,
+            consumer_key=settings.TWITTER_CLIENT_ID,
+            consumer_secret=settings.TWITTER_CLIENT_SECRET
+        )
 
         print("📡 Sending tweet...")
         response = client.create_tweet(text=status_text)
         print("✅ Tweet posted! Response:", response)
 
-        return {"message": "Tweet posted!", "response": response.data}
+        return {"message": "✅ Tweet posted!", "response": response.data}
 
     except Exception as e:
         print("❌ Failed to post tweet.")
