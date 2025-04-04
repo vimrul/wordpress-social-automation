@@ -55,14 +55,13 @@ async def twitter_callback(request: Request, code: str, state: str):
             scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
             client_secret=settings.TWITTER_CLIENT_SECRET,
         )
-        # ✅ Must assign again
+
+        # ✅ Set the code_verifier (required for PKCE)
         oauth2_handler.code_verifier = code_verifier
 
-        # 👇 Explicitly pass code_verifier here!
-        token_data = oauth2_handler.fetch_token(
-            authorization_response=f"{settings.TWITTER_REDIRECT_URI}?code={code}&state={state}",
-            code_verifier=code_verifier
-        )
+        # ✅ Only authorization_response here!
+        full_redirect_url = f"{settings.TWITTER_REDIRECT_URI}?code={code}&state={state}"
+        token_data = oauth2_handler.fetch_token(authorization_response=full_redirect_url)
 
         access_token = token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
