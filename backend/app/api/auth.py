@@ -13,6 +13,7 @@ async def twitter_login(request: Request):
     try:
         # ✅ Generate your own code_verifier
         code_verifier = secrets.token_urlsafe(64)
+        request.session["code_verifier"] = code_verifier  # ✅ this must be a string
 
         # ✅ Initialize handler WITHOUT code_verifier here
         oauth2_handler = tweepy.OAuth2UserHandler(
