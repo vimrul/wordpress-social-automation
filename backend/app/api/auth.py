@@ -4,36 +4,15 @@ from app.core.config import settings
 from app.core.database import database
 from app.models.credentials import credentials
 import tweepy
+import secrets  # for secure random code_verifier
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Step 1: Redirect to Twitter
 @router.get("/twitter")
 async def twitter_login(request: Request):
     try:
-        oauth2_handler = tweepy.OAuth2UserHandler(
-            client_id=settings.TWITTER_CLIENT_ID,
-            redirect_uri=settings.TWITTER_REDIRECT_URI,
-            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
-            client_secret=settings.TWITTER_CLIENT_SECRET  # optional, but safest
-        )
+        code_verifier = secrets.token_urlsafe(64)
 
-        authorization_url = oauth2_handler.get_authorization_url()
-
-        # Save state (PKCE flow needs it)
-        request.session["state"] = oauth2_handler.state
-        request.session["code_verifier"] = oauth2_handler.code_verifier
-
-        return RedirectResponse(authorization_url)
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-# Step 2: Callback
-@router.get("/twitter/callback")
-async def twitter_callback(request: Request, code: str, state: str):
-    try:
-        # Rebuild handler with verifier
         oauth2_handler = tweepy.OAuth2UserHandler(
             client_id=settings.TWITTER_CLIENT_ID,
             redirect_uri=settings.TWITTER_REDIRECT_URI,
@@ -41,16 +20,41 @@ async def twitter_callback(request: Request, code: str, state: str):
             client_secret=settings.TWITTER_CLIENT_SECRET
         )
 
-        # Set previously saved verifier
-        oauth2_handler.code_verifier = request.session.get("code_verifier")
+        # ✅ Assign after init
+        oauth2_handler.code_verifier = code_verifier
+        authorization_url = oauth2_handler.get_authorization_url()
 
-        # Exchange code for tokens
-        token_data = oauth2_handler.fetch_token(code=code)
+        request.session["state"] = oauth2_handler.state
+        request.session["code_verifier"] = code_verifier
+
+        return RedirectResponse(authorization_url)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/twitter/callback")
+async def twitter_callback(request: Request, code: str, state: str):
+    try:
+        code_verifier = request.session.get("code_verifier")
+
+        oauth2_handler = tweepy.OAuth2UserHandler(
+            client_id=settings.TWITTER_CLIENT_ID,
+            redirect_uri=settings.TWITTER_REDIRECT_URI,
+            scope=["tweet.read", "tweet.write", "users.read", "offline.access"],
+            client_secret=settings.TWITTER_CLIENT_SECRET
+        )
+
+        # ✅ Assign after init
+        oauth2_handler.code_verifier = code_verifier
+
+        # Provide full redirect URL with query params
+        full_url = f"{settings.TWITTER_REDIRECT_URI}?code={code}&state={state}"
+        token_data = oauth2_handler.fetch_token(authorization_response=full_url)
 
         access_token = token_data["access_token"]
         refresh_token = token_data.get("refresh_token")
 
-        # Save tokens
         await database.connect()
         await database.execute(
             credentials.insert().values(
@@ -69,6 +73,7 @@ async def twitter_callback(request: Request, code: str, state: str):
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 
 # from fastapi import APIRouter, Request, HTTPException
