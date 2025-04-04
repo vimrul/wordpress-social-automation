@@ -45,12 +45,23 @@ async def twitter_post(data: TwitterPost):
         print("❌ Failed to post tweet.")
         print("💥 Exception:", e)
         raise HTTPException(status_code=400, detail=str(e))
-@router.get("/debug/twitter-token")
-async def debug_twitter_token():
-    await database.connect()
-    result = await database.fetch_one(credentials.select().where(credentials.c.platform == "twitter"))
-    await database.disconnect()
+    
+    from fastapi import status
 
-    if result:
-        return {"twitter_credentials": dict(result)}
-    return {"message": "No Twitter credentials found"}
+@router.delete("/debug/twitter-token", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_twitter_token():
+    await database.connect()
+    delete_query = credentials.delete().where(credentials.c.platform == "twitter")
+    await database.execute(delete_query)
+    await database.disconnect()
+    return {"message": "Twitter token deleted from DB"}
+
+# @router.get("/debug/twitter-token")
+# async def debug_twitter_token():
+#     await database.connect()
+#     result = await database.fetch_one(credentials.select().where(credentials.c.platform == "twitter"))
+#     await database.disconnect()
+
+#     if result:
+#         return {"twitter_credentials": dict(result)}
+#     return {"message": "No Twitter credentials found"}
